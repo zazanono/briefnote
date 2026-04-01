@@ -1,0 +1,92 @@
+# =========================
+# OS / editor files
+# =========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+backend/venv/
+backend/.venv/
+
+# Python packaging / build artifacts
+build/
+dist/
+.eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+
+# =========================
+# Backend logs / local files
+# =========================
+*.log
+
+# SQLite local database files
+*.sqlite
+*.sqlite3
+*.db
+
+# SQLite journal / WAL / SHM files
+*.sqlite-journal
+*.sqlite3-journal
+*.db-journal
+*.sqlite-wal
+*.sqlite3-wal
+*.db-wal
+*.sqlite-shm
+*.sqlite3-shm
+*.db-shm
+
+# =========================
+# Node / frontend
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend build output
+frontend/dist/
+dist/
+coverage/
+.vite/
+
+# TypeScript build metadata
+*.tsbuildinfo
+
+# =========================
+# Misc temp / cache
+# =========================
+tmp/
+temp/
+.cache/
