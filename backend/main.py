@@ -1,11 +1,20 @@
+import json
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import FastAPI, HTTPException, status
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
+import ai_provider
+import prompt_builder
 
 DATABASE_URL = "sqlite:///./briefnote.db"
 
@@ -29,6 +38,8 @@ class DocumentSummary(BaseModel):
     title: str
     updated_at: datetime
 
+    model_config = {"from_attributes": True}
+
 
 class DocumentCreate(BaseModel):
     title: str | None = None
@@ -47,14 +58,13 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class AiChatRequest(BaseModel):
-    document_content: str
+    document_id: str
     selection: str | None = None
-    action: str
+    action: Literal["ask", "summarize", "rewrite", "extract"]
     user_message: str
 
 
@@ -83,13 +93,13 @@ def on_startup():
 
 
 @app.get("/api/documents", response_model=list[DocumentSummary])
-def list_documents(db: Session = next(get_db())):
+def list_documents(db: Session = Depends(get_db)):
     docs = db.query(DocumentModel).order_by(DocumentModel.updated_at.desc()).all()
     return [DocumentSummary.model_validate(doc) for doc in docs]
 
 
 @app.post("/api/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-def create_document(data: DocumentCreate, db: Session = next(get_db())):
+def create_document(data: DocumentCreate, db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
     doc = DocumentModel(
         id=str(uuid.uuid4()),
@@ -105,7 +115,7 @@ def create_document(data: DocumentCreate, db: Session = next(get_db())):
 
 
 @app.get("/api/documents/{doc_id}", response_model=DocumentResponse)
-def get_document(doc_id: str, db: Session = next(get_db())):
+def get_document(doc_id: str, db: Session = Depends(get_db)):
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -113,7 +123,7 @@ def get_document(doc_id: str, db: Session = next(get_db())):
 
 
 @app.put("/api/documents/{doc_id}", response_model=DocumentResponse)
-def update_document(doc_id: str, data: DocumentUpdate, db: Session = next(get_db())):
+def update_document(doc_id: str, data: DocumentUpdate, db: Session = Depends(get_db)):
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -128,7 +138,7 @@ def update_document(doc_id: str, data: DocumentUpdate, db: Session = next(get_db
 
 
 @app.delete("/api/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(doc_id: str, db: Session = next(get_db())):
+def delete_document(doc_id: str, db: Session = Depends(get_db)):
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -137,5 +147,25 @@ def delete_document(doc_id: str, db: Session = next(get_db())):
 
 
 @app.post("/api/ai/chat")
-def ai_chat(request: AiChatRequest):
-    return {"message": "AI endpoint stub - real implementation coming next"}
+async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
+    doc = db.query(DocumentModel).filter(DocumentModel.id == request.document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    messages = prompt_builder.build_messages(
+        document_content=doc.content,
+        action=request.action,
+        user_message=request.user_message,
+        selection=request.selection,
+    )
+
+    async def stream():
+        try:
+            for chunk in ai_provider.stream_chat(messages):
+                yield json.dumps({"delta": chunk}) + "\n"
+            yield "[DONE]\n"
+        except Exception as e:
+            yield json.dumps({"error": str(e)}) + "\n"
+            yield "[DONE]\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")

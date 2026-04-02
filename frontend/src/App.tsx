@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { AiChatRequest, Document, DocumentSummary } from './types'
+import { AiAction, AiChatRequest, Document, DocumentSummary } from './types'
 import { createDocument, deleteDocument, getDocument, listDocuments, updateDocument } from './api'
 
 function formatDate(iso: string): string {
@@ -136,35 +136,32 @@ function Sidebar({
 
 function EditorPane({
   doc,
-  onContentChange,
+  editor,
   onTitleChange,
   saveState,
 }: {
   doc: Document | null
-  onContentChange: (html: string) => void
+  editor: ReturnType<typeof useEditor>
   onTitleChange: (title: string) => void
   saveState: 'saved' | 'saving' | 'unsaved'
 }) {
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: doc?.content || '',
-    onUpdate: ({ editor }) => {
-      onContentChange(editor.getHTML())
-    },
-  })
-
   const [title, setTitle] = useState(doc?.title || '')
 
   useEffect(() => {
     if (doc) {
-      editor?.commands.setContent(doc.content || '', false)
       setTitle(doc.title)
     }
-  }, [doc?.id])
+  }, [doc?.title])
 
   function handleTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setTitle(e.target.value)
     onTitleChange(e.target.value)
+  }
+
+  function handleTitleBlur() {
+    if (title !== doc?.title) {
+      onTitleChange(title)
+    }
   }
 
   if (!doc) {
@@ -184,6 +181,7 @@ function EditorPane({
           className="editor-title-input"
           value={title}
           onChange={handleTitleChange}
+          onBlur={handleTitleBlur}
           placeholder="Untitled"
         />
       </div>
@@ -197,46 +195,126 @@ function EditorPane({
   )
 }
 
-function AiPanel({ documentContent }: { documentContent: string }) {
+function AiPanel({
+  documentId,
+  editor,
+}: {
+  documentId: string | null
+  editor: ReturnType<typeof useEditor>
+}) {
   const [message, setMessage] = useState('')
-  const [response, setResponse] = useState<string | null>(null)
+  const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  async function handleAction(action: 'ask' | 'summarize' | 'rewrite' | 'extract') {
+  function getSelection(): string | null {
+    if (!editor) return null
+    const { from, to } = editor.state.selection
+    if (from === to) return null
+    return editor.state.doc.textBetween(from, to, ' ')
+  }
+
+  async function streamResponse(action: AiAction) {
+    if (!documentId) return
     setLoading(true)
-    setResponse(null)
+    setResponse('')
+    setError(null)
+
+    const body: AiChatRequest = {
+      document_id: documentId,
+      selection: getSelection(),
+      action,
+      user_message: action === 'ask' ? message : '',
+    }
+
     try {
-      const body: AiChatRequest = {
-        document_content: documentContent,
-        selection: null,
-        action,
-        user_message: action === 'ask' ? message : '',
-      }
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
-      setResponse(data.message || 'AI response')
-    } catch {
-      setResponse('Error: Could not reach AI endpoint')
+
+      if (!res.body) throw new Error('No response body')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value)
+        const lines = text.split('\n')
+        for (const line of lines) {
+          if (!line.trim() || line === '[DONE]') continue
+          if (line.startsWith('{"error":')) {
+            const err = JSON.parse(line)
+            setError(err.error)
+            continue
+          }
+          if (line.startsWith('{"delta":')) {
+            try {
+              const chunk = JSON.parse(line)
+              setResponse(prev => prev + chunk.delta)
+            } catch {
+              continue
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError('Failed to reach AI endpoint')
     } finally {
       setLoading(false)
     }
   }
+
+  function handleAction(action: AiAction) {
+    streamResponse(action)
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(response)
+  }
+
+  function handleInsert() {
+    if (!editor || !response) return
+    editor.commands.insertContent(response)
+  }
+
+  function handleReplace() {
+    if (!editor || !response) return
+    const { from, to } = editor.state.selection
+    if (from === to) {
+      editor.commands.insertContent(response)
+    } else {
+      editor.commands.deleteRange({ from, to })
+      editor.commands.insertContent(response)
+    }
+  }
+
+  const hasSelection = editor ? editor.state.selection.from !== editor.state.selection.to : false
 
   return (
     <div className="ai-panel">
       <div className="ai-header">
         <h3>AI Assistant</h3>
         <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          Using: full document
+          {hasSelection ? 'Using: selection' : 'Using: full document'}
         </p>
       </div>
       <div className="ai-messages">
-        {response && <div className="ai-message">{response}</div>}
-        {!response && (
+        {loading && <div className="ai-message loading">Thinking...</div>}
+        {error && <div className="ai-message error">{error}</div>}
+        {response && !loading && (
+          <>
+            <div className="ai-message">{response}</div>
+            <div className="ai-response-actions">
+              <button className="action-btn small" onClick={handleCopy}>Copy</button>
+              <button className="action-btn small" onClick={handleInsert}>Insert</button>
+              <button className="action-btn small" onClick={handleReplace}>Replace</button>
+            </div>
+          </>
+        )}
+        {!response && !loading && !error && (
           <div className="empty-state">
             <p>Ask questions about your document, or use an action below</p>
           </div>
@@ -244,13 +322,13 @@ function AiPanel({ documentContent }: { documentContent: string }) {
       </div>
       <div className="ai-actions">
         <div className="action-buttons">
-          <button className="action-btn" onClick={() => handleAction('summarize')} disabled={loading}>
+          <button className="action-btn" onClick={() => handleAction('summarize')} disabled={loading || !documentId}>
             Summarize
           </button>
-          <button className="action-btn" onClick={() => handleAction('rewrite')} disabled={loading}>
+          <button className="action-btn" onClick={() => handleAction('rewrite')} disabled={loading || !documentId}>
             Rewrite
           </button>
-          <button className="action-btn" onClick={() => handleAction('extract')} disabled={loading}>
+          <button className="action-btn" onClick={() => handleAction('extract')} disabled={loading || !documentId}>
             Extract
           </button>
         </div>
@@ -260,11 +338,12 @@ function AiPanel({ documentContent }: { documentContent: string }) {
           placeholder="Ask a question..."
           value={message}
           onChange={e => setMessage(e.target.value)}
+          disabled={loading}
         />
         <button
           className="ai-submit"
           onClick={() => handleAction('ask')}
-          disabled={loading || !message.trim()}
+          disabled={loading || !documentId || (!message.trim() && !hasSelection)}
         >
           {loading ? 'Thinking...' : 'Ask'}
         </button>
@@ -278,8 +357,25 @@ export default function App() {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingContent = useRef<string | null>(null)
-  const pendingTitle = useRef<string | null>(null)
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: currentDoc?.content || '',
+    onUpdate: ({ editor }) => {
+      if (!currentDoc) return
+      const html = editor.getHTML()
+      setCurrentDoc(prev => prev ? { ...prev, content: html } : null)
+      scheduleSave(() => html)
+    },
+  })
+
+  useEffect(() => {
+    if (!editor || !currentDoc) return
+    const current = editor.getHTML()
+    if (currentDoc.content !== undefined && current !== currentDoc.content) {
+      editor.commands.setContent(currentDoc.content || '', false)
+    }
+  }, [currentDoc?.id, editor])
 
   async function loadDocs() {
     try {
@@ -304,18 +400,16 @@ export default function App() {
     loadDocs()
   }, [])
 
-  function scheduleSave() {
+  function scheduleSave(getHtml: () => string) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     setSaveState('unsaved')
     saveTimer.current = setTimeout(async () => {
       if (!currentDoc) return
       setSaveState('saving')
       try {
-        const doc = await updateDocument(currentDoc.id, pendingTitle.current ?? undefined, pendingContent.current ?? undefined)
+        const doc = await updateDocument(currentDoc.id, currentDoc.title, getHtml())
         setCurrentDoc(doc)
         setSaveState('saved')
-        pendingContent.current = null
-        pendingTitle.current = null
         loadDocs()
       } catch (err) {
         console.error('Save failed:', err)
@@ -324,17 +418,10 @@ export default function App() {
     }, 500)
   }
 
-  function handleContentChange(html: string) {
-    if (!currentDoc) return
-    pendingContent.current = html
-    scheduleSave()
-  }
-
   function handleTitleChange(title: string) {
     if (!currentDoc) return
-    pendingTitle.current = title
     setCurrentDoc(prev => prev ? { ...prev, title } : null)
-    scheduleSave()
+    scheduleSave(() => editor?.getHTML() ?? '')
   }
 
   async function handleCreate() {
@@ -379,11 +466,11 @@ export default function App() {
       />
       <EditorPane
         doc={currentDoc}
-        onContentChange={handleContentChange}
+        editor={editor}
         onTitleChange={handleTitleChange}
         saveState={saveState}
       />
-      <AiPanel documentContent={currentDoc?.content || ''} />
+      <AiPanel documentId={currentDoc?.id ?? null} editor={editor} />
     </div>
   )
 }

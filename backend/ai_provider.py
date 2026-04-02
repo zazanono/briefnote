@@ -1,0 +1,38 @@
+import os
+from typing import Iterator
+
+import httpx
+
+BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-3-4b-it:free")
+API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+
+def stream_chat(messages: list[dict]) -> Iterator[str]:
+    if not API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5173",
+        "X-OpenRouter-Title": "BriefNote",
+    }
+    body = {
+        "model": MODEL,
+        "messages": messages,
+        "stream": False,
+    }
+
+    resp = httpx.post(f"{BASE_URL}/chat/completions", json=body, headers=headers, timeout=60.0)
+    if resp.status_code != 200:
+        raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text}")
+
+    data = resp.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    if not content:
+        return
+
+    for i in range(0, len(content), 4):
+        yield content[i : i + 4]

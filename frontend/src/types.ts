@@ -12,9 +12,11 @@ export interface Document {
   updated_at: string
 }
 
+export type AiAction = 'ask' | 'summarize' | 'rewrite' | 'extract'
+
 export interface AiChatRequest {
-  document_content: string
+  document_id: string
   selection: string | null
-  action: 'ask' | 'summarize' | 'rewrite' | 'extract'
+  action: AiAction
   user_message: string
 }
