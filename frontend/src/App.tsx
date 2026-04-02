@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { AiAction, AiChatRequest, AiSettings, Document, DocumentSummary } from './types'
-import { createDocument, deleteDocument, getAiSettings, getDocument, listDocuments, updateDocument } from './api'
+import { createDocument, deleteDocument, getAiSettings, getDocument, listDocuments, updateDocument, getChatHistory } from './api'
 
 function DocItem({
   doc,
@@ -172,9 +172,6 @@ function EditorPane({
       <div className="editor-scroll-area">
         <div className="document-page">
           <div className="editor-header">
-            <div className="save-indicator" data-state={saveState}>
-              {saveState === 'saving' ? 'Saving...' : saveState === 'unsaved' ? 'Unsaved' : 'Saved'}
-            </div>
             <div className="editor-title-row">
               <input
                 ref={renameInputRef as React.RefObject<HTMLInputElement>}
@@ -193,6 +190,9 @@ function EditorPane({
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
               </button>
+            </div>
+            <div className="save-indicator" data-state={saveState}>
+              {saveState === 'saving' ? 'Saving...' : saveState === 'unsaved' ? 'Unsaved' : 'Saved'}
             </div>
           </div>
           <div className="editor-content">
@@ -216,19 +216,33 @@ function AiPanel({
   className?: string
 }) {
   const [message, setMessage] = useState('')
-  const [response, setResponse] = useState('')
+  const [chatMessages, setChatMessages] = useState<import('./types').ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const lastRequestRef = useRef<{ action: AiAction; message: string; selection: string | null } | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getAiSettings().then(setSettings).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    setChatMessages([])
+    setError(null)
+    setLoading(false)
+    if (documentId) {
+      getChatHistory(documentId).then(setChatMessages).catch(() => {})
+    }
+  }, [documentId])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   function getSelection(): string | null {
     if (!editor) return null
@@ -254,11 +268,16 @@ function AiPanel({
     abortRef.current = new AbortController()
 
     setLoading(true)
-    setResponse('')
     setError(null)
 
     const sel = getSelection()
-    const msg = action === 'ask' ? (overrideMessage ?? message) : ''
+    let msg = action === 'ask' ? (overrideMessage ?? message) : ''
+    if (action !== 'ask') {
+      const target = sel ? 'selection' : 'document'
+      if (action === 'summarize') msg = `Summarize ${target}`
+      else if (action === 'rewrite') msg = `Rewrite ${target}`
+      else if (action === 'extract') msg = `Extract information from ${target}`
+    }
 
     lastRequestRef.current = { action, message: msg, selection: sel }
 
@@ -269,6 +288,26 @@ function AiPanel({
       user_message: msg,
       model: settings?.model,
     }
+
+    const tempId = Date.now().toString()
+    if (msg) {
+      setChatMessages(prev => [...prev, {
+        id: `user-${tempId}`,
+        document_id: documentId,
+        role: 'user',
+        content: msg,
+        created_at: new Date().toISOString()
+      }])
+    }
+
+    const astId = `ast-${tempId}`
+    setChatMessages(prev => [...prev, {
+      id: astId,
+      document_id: documentId,
+      role: 'assistant',
+      content: '',
+      created_at: new Date().toISOString()
+    }])
 
     try {
       const res = await fetch('/api/ai/chat', {
@@ -297,12 +336,19 @@ function AiPanel({
           if (line.startsWith('{"delta":')) {
             try {
               const chunk = JSON.parse(line)
-              setResponse(prev => prev + chunk.delta)
+              setChatMessages(prev => prev.map(m => 
+                m.id === astId ? { ...m, content: m.content + chunk.delta } : m
+              ))
             } catch {
               continue
             }
           }
         }
+      }
+      
+      if (!abortRef.current?.signal.aborted) {
+        const history = await getChatHistory(documentId)
+        setChatMessages(history)
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -333,25 +379,25 @@ function AiPanel({
     abortRef.current?.abort()
   }
 
-  function handleCopy() {
-    navigator.clipboard.writeText(response)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+  function handleCopy(content: string, id: string) {
+    navigator.clipboard.writeText(content)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 1500)
   }
 
-  function handleInsert() {
-    if (!editor || !response) return
-    const html = textToHtml(response)
+  function handleInsert(content: string) {
+    if (!editor || !content) return
+    const html = textToHtml(content)
     editor.commands.insertContent(html)
   }
 
-  function handleReplace() {
-    if (!editor || !response) return
+  function handleReplace(content: string) {
+    if (!editor || !content) return
     const { from, to } = editor.state.selection
     if (from === to) {
-      handleInsert()
+      handleInsert(content)
     } else {
-      const html = textToHtml(response)
+      const html = textToHtml(content)
       editor.commands.deleteRange({ from, to })
       editor.commands.insertContent(html)
     }
@@ -363,7 +409,6 @@ function AiPanel({
     if (!editor) return false
     return editor.state.selection.from !== editor.state.selection.to
   })()
-  const hasResponse = response && !loading
 
   return (
     <div className={className || 'ai-panel'}>
@@ -392,32 +437,41 @@ function AiPanel({
       </div>
 
       <div className="ai-messages">
-        {loading && (
-          <div className="ai-message loading">
-            Thinking...
-            <button className="cancel-btn" onClick={handleCancel}>Cancel</button>
-          </div>
-        )}
-        {error && (
-          <div className="ai-message error">{error}</div>
-        )}
-        {hasResponse && (
-          <>
-            <div className="ai-message">{response}</div>
-            <div className="ai-response-actions">
-              <button className="action-btn small" onClick={handleCopy}>{copied ? 'Copied!' : 'Copy'}</button>
-              <button className="action-btn small" onClick={handleInsert}>Insert</button>
-              <button className="action-btn small" onClick={handleReplace}>Replace</button>
-              <button className="action-btn small" onClick={handleRegenerate}>Retry</button>
-            </div>
-          </>
-        )}
-        {!hasResponse && !loading && !error && (
+        {chatMessages.length === 0 && !loading && !error && (
           <div className="empty-state">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-light)" strokeWidth="1.5" style={{ marginBottom: 12 }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
             <p>Ask about your document, or use an action below.</p>
           </div>
         )}
+        
+        {chatMessages.map((m, index) => (
+          <div key={m.id} className={`ai-message-bubble ${m.role}`}>
+            <div className="ai-message">{m.content || (m.role === 'assistant' && loading ? 'Thinking...' : '')}</div>
+            {m.role === 'assistant' && m.content && (
+              <div className="ai-response-actions">
+                <button className="action-btn small" onClick={() => handleCopy(m.content, m.id)}>
+                  {copiedId === m.id ? 'Copied!' : 'Copy'}
+                </button>
+                <button className="action-btn small" onClick={() => handleInsert(m.content)}>Insert</button>
+                <button className="action-btn small" onClick={() => handleReplace(m.content)}>Replace</button>
+                {index === chatMessages.length - 1 && (
+                  <button className="action-btn small" onClick={handleRegenerate}>Retry</button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        
+        {error && (
+          <div className="ai-message error">{error}</div>
+        )}
+        {loading && !chatMessages.some(m => m.id.startsWith('ast-')) && (
+          <div className="ai-message loading">
+            Thinking...
+            <button className="cancel-btn" onClick={handleCancel}>Cancel</button>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="ai-actions">
