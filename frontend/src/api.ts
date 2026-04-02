@@ -1,4 +1,4 @@
-import { AiSettings, Document, DocumentSummary } from './types'
+import { AiSettings, ChatMessage, Document, DocumentSummary } from './types'
 
 export async function listDocuments(): Promise<DocumentSummary[]> {
   const res = await fetch('/api/documents')
@@ -40,5 +40,16 @@ export async function deleteDocument(id: string): Promise<void> {
 export async function getAiSettings(): Promise<AiSettings> {
   const res = await fetch('/api/ai/settings')
   if (!res.ok) throw new Error('Failed to load AI settings')
+  return res.json()
+}
+
+export async function getChatHistory(documentId: string): Promise<ChatMessage[]> {
+  const res = await fetch(`/api/documents/${documentId}/chat?t=${Date.now()}`, {
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
+  })
+  if (!res.ok) throw new Error('Failed to load chat history')
   return res.json()
 }
