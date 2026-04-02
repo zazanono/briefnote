@@ -4,11 +4,11 @@ from typing import Iterator
 import httpx
 
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-3-4b-it:free")
+DEFAULT_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 
-def stream_chat(messages: list[dict]) -> Iterator[str]:
+def stream_chat(messages: list[dict], model: str | None = None) -> Iterator[str]:
     if not API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not set")
 
@@ -19,7 +19,7 @@ def stream_chat(messages: list[dict]) -> Iterator[str]:
         "X-OpenRouter-Title": "BriefNote",
     }
     body = {
-        "model": MODEL,
+        "model": model or DEFAULT_MODEL,
         "messages": messages,
         "stream": False,
     }

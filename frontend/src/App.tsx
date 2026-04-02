@@ -1,135 +1,122 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { AiAction, AiChatRequest, Document, DocumentSummary } from './types'
-import { createDocument, deleteDocument, getDocument, listDocuments, updateDocument } from './api'
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
+import { AiAction, AiChatRequest, AiSettings, Document, DocumentSummary } from './types'
+import { createDocument, deleteDocument, getAiSettings, getDocument, listDocuments, updateDocument } from './api'
 
 function DocItem({
   doc,
   isActive,
   onSelect,
-  onRename,
-  onDelete,
+  onDeleteClick,
 }: {
   doc: DocumentSummary
   isActive: boolean
   onSelect: () => void
-  onRename: (title: string) => void
-  onDelete: () => void
+  onDeleteClick: (doc: DocumentSummary) => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(doc.title)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (editing) inputRef.current?.select()
-  }, [editing])
-
-  function handleBlur() {
-    setEditing(false)
-    if (value.trim() && value !== doc.title) onRename(value.trim())
-    else setValue(doc.title)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') inputRef.current?.blur()
-    if (e.key === 'Escape') {
-      setValue(doc.title)
-      setEditing(false)
-    }
+  function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    e.preventDefault()
+    onDeleteClick(doc)
   }
 
   return (
     <div className={`doc-item ${isActive ? 'active' : ''}`} onClick={onSelect}>
       <div className="doc-item-title">
-        {editing ? (
-          <input
-            ref={inputRef}
-            className="rename-input"
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            onClick={e => e.stopPropagation()}
-          />
-        ) : (
-          <>
-            <span>{doc.title || 'Untitled'}</span>
-            <div className="doc-item-actions">
-              <button
-                className="icon-btn"
-                onClick={e => {
-                  e.stopPropagation()
-                  setEditing(true)
-                }}
-              >
-                rename
-              </button>
-              <button
-                className="icon-btn delete"
-                onClick={e => {
-                  e.stopPropagation()
-                  if (window.confirm(`Delete "${doc.title}"?`)) onDelete()
-                }}
-              >
-                del
-              </button>
-            </div>
-          </>
-        )}
+        {doc.title || 'Untitled'}
       </div>
-      <div className="doc-item-date">{formatDate(doc.updated_at)}</div>
+      <div className="doc-item-actions">
+        <button
+          className="icon-btn delete"
+          onClick={handleDeleteClick}
+          title="Delete"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
+      </div>
     </div>
   )
 }
 
 function Sidebar({
   docs,
+  loading,
   currentId,
   onSelect,
   onCreate,
-  onRename,
   onDelete,
 }: {
   docs: DocumentSummary[]
+  loading: boolean
   currentId: string | null
   onSelect: (id: string) => void
   onCreate: () => void
-  onRename: (id: string, title: string) => void
   onDelete: (id: string) => void
 }) {
+  const [docToDelete, setDocToDelete] = useState<DocumentSummary | null>(null)
+
+  useEffect(() => {
+    if (!docToDelete) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onDelete(docToDelete.id)
+        setDocToDelete(null)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setDocToDelete(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [docToDelete, onDelete])
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h2>Documents</h2>
+        <button className="new-doc-btn" onClick={onCreate}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          New Document
+        </button>
       </div>
       <div className="doc-list">
+        {loading && docs.length === 0 && <div className="empty-state"><p>Loading...</p></div>}
         {docs.map(doc => (
           <DocItem
             key={doc.id}
             doc={doc}
             isActive={doc.id === currentId}
             onSelect={() => onSelect(doc.id)}
-            onRename={title => onRename(doc.id, title)}
-            onDelete={() => onDelete(doc.id)}
+            onDeleteClick={setDocToDelete}
           />
         ))}
-        {docs.length === 0 && (
-          <div className="empty-state">
+        {!loading && docs.length === 0 && (
+          <div className="empty-state" style={{ padding: '24px 12px' }}>
             <p>No documents yet</p>
           </div>
         )}
       </div>
-      <div style={{ padding: '8px' }}>
-        <button className="new-doc-btn" onClick={onCreate}>
-          + New Document
-        </button>
-      </div>
+
+      {docToDelete && (
+        <div className="modal-overlay" onClick={() => setDocToDelete(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">Delete Document</div>
+            <div className="modal-body">
+              Are you sure you want to delete "{docToDelete.title || 'Untitled'}"? This action cannot be undone.
+            </div>
+            <div className="modal-actions">
+              <button className="modal-btn cancel" onClick={() => setDocToDelete(null)}>Cancel</button>
+              <button className="modal-btn delete" onClick={() => {
+                onDelete(docToDelete.id)
+                setDocToDelete(null)
+              }}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -138,20 +125,22 @@ function EditorPane({
   doc,
   editor,
   onTitleChange,
+  onTitleBlur,
   saveState,
 }: {
   doc: Document | null
   editor: ReturnType<typeof useEditor>
   onTitleChange: (title: string) => void
+  onTitleBlur: (title: string, getHtml: () => string) => void
   saveState: 'saved' | 'saving' | 'unsaved'
 }) {
   const [title, setTitle] = useState(doc?.title || '')
+  const [editingTitle, setEditingTitle] = useState(false)
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (doc) {
-      setTitle(doc.title)
-    }
-  }, [doc?.title])
+    if (doc && !editingTitle) setTitle(doc.title)
+  }, [doc?.id, doc?.title, editingTitle])
 
   function handleTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setTitle(e.target.value)
@@ -159,15 +148,19 @@ function EditorPane({
   }
 
   function handleTitleBlur() {
-    if (title !== doc?.title) {
-      onTitleChange(title)
-    }
+    setEditingTitle(false)
+    onTitleBlur(title, () => editor?.getHTML() ?? '')
+  }
+
+  function handleTitleFocus() {
+    setEditingTitle(true)
   }
 
   if (!doc) {
     return (
-      <div className="editor-pane">
+      <div className="editor-pane" style={{ justifyContent: 'center', alignItems: 'center' }}>
         <div className="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--border)" strokeWidth="1" style={{ marginBottom: 16 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <p>Select a document or create a new one</p>
         </div>
       </div>
@@ -176,20 +169,36 @@ function EditorPane({
 
   return (
     <div className="editor-pane">
-      <div className="editor-header">
-        <input
-          className="editor-title-input"
-          value={title}
-          onChange={handleTitleChange}
-          onBlur={handleTitleBlur}
-          placeholder="Untitled"
-        />
-      </div>
-      <div className="editor-content">
-        <EditorContent editor={editor} />
-      </div>
-      <div className="save-indicator">
-        {saveState === 'saving' ? 'Saving...' : saveState === 'unsaved' ? 'Unsaved changes' : 'Saved'}
+      <div className="editor-scroll-area">
+        <div className="document-page">
+          <div className="editor-header">
+            <div className="save-indicator" data-state={saveState}>
+              {saveState === 'saving' ? 'Saving...' : saveState === 'unsaved' ? 'Unsaved' : 'Saved'}
+            </div>
+            <div className="editor-title-row">
+              <input
+                ref={renameInputRef as React.RefObject<HTMLInputElement>}
+                className="editor-title-input"
+                value={title}
+                onChange={handleTitleChange}
+                onBlur={handleTitleBlur}
+                onFocus={handleTitleFocus}
+                placeholder="Untitled"
+              />
+              <button
+                className="icon-btn rename-btn"
+                onClick={() => renameInputRef.current?.focus()}
+                title="Rename"
+                style={{ opacity: 0, transition: 'opacity 0.15s' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div className="editor-content">
+            <EditorContent editor={editor} />
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -198,33 +207,67 @@ function EditorPane({
 function AiPanel({
   documentId,
   editor,
+  lastSelectionRef,
+  className,
 }: {
   documentId: string | null
   editor: ReturnType<typeof useEditor>
+  lastSelectionRef: React.RefObject<{ from: number; to: number } | null>
+  className?: string
 }) {
   const [message, setMessage] = useState('')
   const [response, setResponse] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [settings, setSettings] = useState<AiSettings | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const abortRef = useRef<AbortController | null>(null)
+  const lastRequestRef = useRef<{ action: AiAction; message: string; selection: string | null } | null>(null)
+
+  useEffect(() => {
+    getAiSettings().then(setSettings).catch(() => {})
+  }, [])
 
   function getSelection(): string | null {
     if (!editor) return null
+    const stored = lastSelectionRef.current
+    if (stored && stored.from !== stored.to) {
+      return editor.state.doc.textBetween(stored.from, stored.to, ' ')
+    }
     const { from, to } = editor.state.selection
     if (from === to) return null
     return editor.state.doc.textBetween(from, to, ' ')
   }
 
-  async function streamResponse(action: AiAction) {
+  function textToHtml(text: string): string {
+    return text.split('\n\n').filter(p => p.trim()).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('')
+  }
+
+  async function streamResponse(action: AiAction, overrideMessage?: string) {
     if (!documentId) return
+
+    if (abortRef.current) {
+      abortRef.current.abort()
+    }
+    abortRef.current = new AbortController()
+
     setLoading(true)
     setResponse('')
     setError(null)
 
+    const sel = getSelection()
+    const msg = action === 'ask' ? (overrideMessage ?? message) : ''
+
+    lastRequestRef.current = { action, message: msg, selection: sel }
+
     const body: AiChatRequest = {
       document_id: documentId,
-      selection: getSelection(),
+      selection: sel,
       action,
-      user_message: action === 'ask' ? message : '',
+      user_message: msg,
+      model: settings?.model,
     }
 
     try {
@@ -232,6 +275,7 @@ function AiPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: abortRef.current.signal,
       })
 
       if (!res.body) throw new Error('No response body')
@@ -260,93 +304,165 @@ function AiPanel({
           }
         }
       }
-    } catch (err) {
-      setError('Failed to reach AI endpoint')
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Cancelled')
+      } else {
+        setError('Failed to reach AI endpoint')
+      }
     } finally {
       setLoading(false)
+      abortRef.current = null
     }
   }
 
   function handleAction(action: AiAction) {
-    streamResponse(action)
+    const msg = action === 'ask' ? message : ''
+    setMessage('')
+    streamResponse(action, msg)
+  }
+
+  function handleRegenerate() {
+    if (!lastRequestRef.current) return
+    const req = lastRequestRef.current
+    if (req.action === 'ask') setMessage(req.message)
+    streamResponse(req.action, req.message)
+  }
+
+  function handleCancel() {
+    abortRef.current?.abort()
   }
 
   function handleCopy() {
     navigator.clipboard.writeText(response)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   function handleInsert() {
     if (!editor || !response) return
-    editor.commands.insertContent(response)
+    const html = textToHtml(response)
+    editor.commands.insertContent(html)
   }
 
   function handleReplace() {
     if (!editor || !response) return
     const { from, to } = editor.state.selection
     if (from === to) {
-      editor.commands.insertContent(response)
+      handleInsert()
     } else {
+      const html = textToHtml(response)
       editor.commands.deleteRange({ from, to })
-      editor.commands.insertContent(response)
+      editor.commands.insertContent(html)
     }
   }
 
-  const hasSelection = editor ? editor.state.selection.from !== editor.state.selection.to : false
+  const hasSelection = (() => {
+    const stored = lastSelectionRef.current
+    if (stored && stored.from !== stored.to) return true
+    if (!editor) return false
+    return editor.state.selection.from !== editor.state.selection.to
+  })()
+  const hasResponse = response && !loading
 
   return (
-    <div className="ai-panel">
+    <div className={className || 'ai-panel'}>
       <div className="ai-header">
-        <h3>AI Assistant</h3>
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          {hasSelection ? 'Using: selection' : 'Using: full document'}
-        </p>
-      </div>
-      <div className="ai-messages">
-        {loading && <div className="ai-message loading">Thinking...</div>}
-        {error && <div className="ai-message error">{error}</div>}
-        {response && !loading && (
-          <>
-            <div className="ai-message">{response}</div>
-            <div className="ai-response-actions">
-              <button className="action-btn small" onClick={handleCopy}>Copy</button>
-              <button className="action-btn small" onClick={handleInsert}>Insert</button>
-              <button className="action-btn small" onClick={handleReplace}>Replace</button>
-            </div>
-          </>
-        )}
-        {!response && !loading && !error && (
-          <div className="empty-state">
-            <p>Ask questions about your document, or use an action below</p>
+        <div className="ai-header-row">
+          <div className="ai-header-title">
+            <h3>Assistant</h3>
+            <span className="ai-context-badge">{hasSelection ? 'Selection' : 'Document'}</span>
+          </div>
+          <button className="icon-btn" onClick={() => setShowSettings(s => !s)} onMouseDown={e => e.preventDefault()} title="Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        </div>
+        {showSettings && (
+          <div className="ai-settings">
+            <label className="settings-label">Model</label>
+            <input
+              className="settings-input"
+              value={settings?.model || ''}
+              onChange={e => setSettings(s => s ? { ...s, model: e.target.value } : { model: e.target.value })}
+              placeholder="openrouter/free"
+              onMouseDown={e => e.stopPropagation()}
+            />
           </div>
         )}
       </div>
+
+      <div className="ai-messages">
+        {loading && (
+          <div className="ai-message loading">
+            Thinking...
+            <button className="cancel-btn" onClick={handleCancel}>Cancel</button>
+          </div>
+        )}
+        {error && (
+          <div className="ai-message error">{error}</div>
+        )}
+        {hasResponse && (
+          <>
+            <div className="ai-message">{response}</div>
+            <div className="ai-response-actions">
+              <button className="action-btn small" onClick={handleCopy}>{copied ? 'Copied!' : 'Copy'}</button>
+              <button className="action-btn small" onClick={handleInsert}>Insert</button>
+              <button className="action-btn small" onClick={handleReplace}>Replace</button>
+              <button className="action-btn small" onClick={handleRegenerate}>Retry</button>
+            </div>
+          </>
+        )}
+        {!hasResponse && !loading && !error && (
+          <div className="empty-state">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-light)" strokeWidth="1.5" style={{ marginBottom: 12 }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <p>Ask about your document, or use an action below.</p>
+          </div>
+        )}
+      </div>
+
       <div className="ai-actions">
         <div className="action-buttons">
-          <button className="action-btn" onClick={() => handleAction('summarize')} disabled={loading || !documentId}>
+          <button className="action-btn" onClick={() => handleAction('summarize')} onMouseDown={e => e.preventDefault()} disabled={loading || !documentId}>
             Summarize
           </button>
-          <button className="action-btn" onClick={() => handleAction('rewrite')} disabled={loading || !documentId}>
+          <button className="action-btn" onClick={() => handleAction('rewrite')} onMouseDown={e => e.preventDefault()} disabled={loading || !documentId}>
             Rewrite
           </button>
-          <button className="action-btn" onClick={() => handleAction('extract')} disabled={loading || !documentId}>
+          <button className="action-btn" onClick={() => handleAction('extract')} onMouseDown={e => e.preventDefault()} disabled={loading || !documentId}>
             Extract
           </button>
         </div>
-        <textarea
-          className="ai-input"
-          rows={2}
-          placeholder="Ask a question..."
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-          disabled={loading}
-        />
-        <button
-          className="ai-submit"
-          onClick={() => handleAction('ask')}
-          disabled={loading || !documentId || (!message.trim() && !hasSelection)}
-        >
-          {loading ? 'Thinking...' : 'Ask'}
-        </button>
+        <div className="ai-input-wrapper">
+          <textarea
+            className="ai-input"
+            rows={1}
+            placeholder="Ask a question..."
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            disabled={loading}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (!loading && documentId && (message.trim() || hasSelection)) {
+                  handleAction('ask')
+                }
+              }
+            }}
+          />
+          <button
+            className="ai-submit"
+            onClick={() => handleAction('ask')}
+            onMouseDown={e => e.preventDefault()}
+            disabled={loading || !documentId || (!message.trim() && !hasSelection)}
+            title="Send"
+          >
+            {loading ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -354,18 +470,31 @@ function AiPanel({
 
 export default function App() {
   const [docs, setDocs] = useState<DocumentSummary[]>([])
+  const [docsLoading, setDocsLoading] = useState(false)
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [mobilePane, setMobilePane] = useState<'sidebar' | 'editor' | 'ai'>('editor')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSelectionRef = useRef<{ from: number; to: number } | null>(null)
+  const currentDocRef = useRef<Document | null>(currentDoc)
+  
+  // Keep ref in sync
+  currentDocRef.current = currentDoc
 
   const editor = useEditor({
     extensions: [StarterKit],
     content: currentDoc?.content || '',
     onUpdate: ({ editor }) => {
-      if (!currentDoc) return
+      if (!currentDocRef.current) return
       const html = editor.getHTML()
       setCurrentDoc(prev => prev ? { ...prev, content: html } : null)
       scheduleSave(() => html)
+    },
+    onSelectionUpdate: ({ editor }) => {
+      const { from, to } = editor.state.selection
+      if (from !== to) {
+        lastSelectionRef.current = { from, to }
+      }
     },
   })
 
@@ -375,18 +504,57 @@ export default function App() {
     if (currentDoc.content !== undefined && current !== currentDoc.content) {
       editor.commands.setContent(currentDoc.content || '', false)
     }
+    // Auto-focus when switching documents or creating a new one
+    // Using setTimeout to ensure it happens after render
+    setTimeout(() => {
+      if (!editor.isDestroyed) {
+        editor.commands.focus('end')
+      }
+    }, 0)
   }, [currentDoc?.id, editor])
 
   async function loadDocs() {
+    // Prevent duplicate in-flight requests
+    if (docsLoading) return
+    
+    setDocsLoading(true)
     try {
       const list = await listDocuments()
-      setDocs(list)
+      // Sort by created_at descending to prevent shuffling
+      const sorted = [...list].sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      setDocs(sorted)
     } catch (err) {
       console.error('Failed to load docs:', err)
+    } finally {
+      setDocsLoading(false)
     }
   }
 
-  async function loadDoc(id: string) {
+  async function loadDoc(id: string, prevDocId?: string, prevDocTitle?: string, getPrevHtml?: () => string) {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+
+    // Save previous doc's content if we have context
+    if (prevDocId && getPrevHtml) {
+      const content = getPrevHtml()
+      const isEmpty = content === '' || content === `<p>${prevDocTitle ?? ''}</p>`
+      if (!isEmpty) {
+        try {
+          // Pass undefined for title so we don't overwrite a concurrent title change
+          const updated = await updateDocument(prevDocId, undefined, content)
+          // Update the docs array so the sidebar has the latest state for the old doc
+          setDocs(prev => prev.map(d => d.id === updated.id ? updated : d))
+        } catch (err) {
+          console.error('Auto-save failed:', err)
+        }
+      }
+    }
+
+    // Then load new doc
     try {
       const doc = await getDocument(id)
       setCurrentDoc(doc)
@@ -402,75 +570,164 @@ export default function App() {
 
   function scheduleSave(getHtml: () => string) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
+    
+    const docId = currentDocRef.current?.id
+    if (!docId) return
+    
     setSaveState('unsaved')
     saveTimer.current = setTimeout(async () => {
-      if (!currentDoc) return
+      // Use the latest title when the timeout fires, but the html that was generated
+      const latestDoc = currentDocRef.current
+      if (!latestDoc || latestDoc.id !== docId) return
+      
       setSaveState('saving')
       try {
-        const doc = await updateDocument(currentDoc.id, currentDoc.title, getHtml())
-        setCurrentDoc(doc)
-        setSaveState('saved')
-        loadDocs()
+        const content = getHtml()
+        const doc = await updateDocument(docId, latestDoc.title, content)
+        // Update docs array in place instead of refetching
+        setDocs(prev => prev.map(d => d.id === doc.id ? doc : d))
+        
+        // Only update currentDoc if we haven't switched documents
+        if (currentDocRef.current?.id === docId) {
+          setCurrentDoc(doc)
+          setSaveState('saved')
+        }
       } catch (err) {
         console.error('Save failed:', err)
-        setSaveState('unsaved')
+        if (currentDocRef.current?.id === docId) {
+          setSaveState('unsaved')
+        }
       }
     }, 500)
   }
 
   function handleTitleChange(title: string) {
-    if (!currentDoc) return
+    if (!currentDocRef.current) return
     setCurrentDoc(prev => prev ? { ...prev, title } : null)
-    scheduleSave(() => editor?.getHTML() ?? '')
+    setDocs(prev => prev.map(d => d.id === currentDocRef.current?.id ? { ...d, title } : d))
+  }
+
+  async function handleTitleBlur(title: string, getHtml: () => string) {
+    const doc = currentDocRef.current
+    if (!doc) return
+    const docId = doc.id
+    const content = getHtml()
+    setSaveState('saving')
+    try {
+      const updated = await updateDocument(docId, title, content)
+      // Update docs array in place instead of refetching
+      setDocs(prev => prev.map(d => d.id === updated.id ? updated : d))
+      
+      // Only update currentDoc if we haven't switched documents
+      if (currentDocRef.current?.id === docId) {
+        setCurrentDoc(updated)
+        setSaveState('saved')
+      }
+    } catch (err) {
+      console.error('Title save failed:', err)
+      if (currentDocRef.current?.id === docId) {
+        setSaveState('unsaved')
+      }
+    }
   }
 
   async function handleCreate() {
     try {
       const doc = await createDocument()
-      await loadDocs()
+      setDocs(prev => [doc, ...prev])
       setCurrentDoc(doc)
+      setSaveState('saved')
     } catch (err) {
       console.error('Failed to create doc:', err)
     }
   }
 
   async function handleDelete(id: string) {
+    // Clear any pending save for this doc
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    
+    // Optimistic update for instant UI response
+    setDocs(prev => prev.filter(d => d.id !== id))
+    
+    if (currentDoc?.id === id) {
+      setCurrentDoc(null)
+      setSaveState('saved')
+    }
+    
     try {
       await deleteDocument(id)
-      if (currentDoc?.id === id) setCurrentDoc(null)
-      await loadDocs()
     } catch (err) {
       console.error('Failed to delete doc:', err)
-    }
-  }
-
-  async function handleRename(id: string, title: string) {
-    try {
-      const doc = await updateDocument(id, title)
-      await loadDocs()
-      if (currentDoc?.id === id) setCurrentDoc(doc)
-    } catch (err) {
-      console.error('Failed to rename doc:', err)
+      await loadDocs() // Revert on failure
     }
   }
 
   return (
     <div className="app">
-      <Sidebar
-        docs={docs}
-        currentId={currentDoc?.id ?? null}
-        onSelect={loadDoc}
-        onCreate={handleCreate}
-        onRename={handleRename}
-        onDelete={handleDelete}
-      />
-      <EditorPane
-        doc={currentDoc}
+      <div className="mobile-bar">
+        <button
+          className={mobilePane === 'sidebar' ? 'active' : ''}
+          onClick={() => setMobilePane('sidebar')}
+        >
+          Docs
+        </button>
+        <button
+          className={mobilePane === 'editor' ? 'active' : ''}
+          onClick={() => setMobilePane('editor')}
+        >
+          Editor
+        </button>
+        <button
+          className={mobilePane === 'ai' ? 'active' : ''}
+          onClick={() => setMobilePane('ai')}
+        >
+          AI
+        </button>
+      </div>
+
+      <div className={`pane-wrapper ${mobilePane === 'sidebar' ? 'mobile-active' : ''}`}>
+        <Sidebar
+          docs={docs}
+          loading={docsLoading}
+          currentId={currentDoc?.id ?? null}
+          onSelect={id => {
+            if (id === currentDoc?.id) {
+              setMobilePane('editor')
+              return
+            }
+            const prev = currentDoc
+            loadDoc(
+              id,
+              prev ? prev.id : undefined,
+              prev ? prev.title : undefined,
+              () => editor?.getHTML() ?? ''
+            )
+            setMobilePane('editor')
+          }}
+          onCreate={() => { handleCreate(); setMobilePane('editor') }}
+          onDelete={handleDelete}
+        />
+      </div>
+
+      <div className={`pane-wrapper ${mobilePane === 'editor' ? 'mobile-active' : ''}`}>
+        <EditorPane
+          doc={currentDoc}
+          editor={editor}
+          onTitleChange={handleTitleChange}
+          onTitleBlur={handleTitleBlur}
+          saveState={saveState}
+        />
+      </div>
+
+      <AiPanel
+        documentId={currentDoc?.id ?? null}
         editor={editor}
-        onTitleChange={handleTitleChange}
-        saveState={saveState}
+        lastSelectionRef={lastSelectionRef}
+        className={mobilePane === 'ai' ? 'ai-panel mobile-open' : undefined}
       />
-      <AiPanel documentId={currentDoc?.id ?? null} editor={editor} />
     </div>
   )
 }

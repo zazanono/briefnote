@@ -36,6 +36,7 @@ class DocumentModel(Base):
 class DocumentSummary(BaseModel):
     id: str
     title: str
+    created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
@@ -66,6 +67,11 @@ class AiChatRequest(BaseModel):
     selection: str | None = None
     action: Literal["ask", "summarize", "rewrite", "extract"]
     user_message: str
+    model: str | None = None
+
+
+class AiSettings(BaseModel):
+    model: str
 
 
 app = FastAPI()
@@ -146,6 +152,12 @@ def delete_document(doc_id: str, db: Session = Depends(get_db)):
     db.commit()
 
 
+@app.get("/api/ai/settings", response_model=AiSettings)
+def get_ai_settings():
+    import ai_provider
+    return AiSettings(model=ai_provider.DEFAULT_MODEL)
+
+
 @app.post("/api/ai/chat")
 async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
     doc = db.query(DocumentModel).filter(DocumentModel.id == request.document_id).first()
@@ -157,11 +169,12 @@ async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
         action=request.action,
         user_message=request.user_message,
         selection=request.selection,
+        title=doc.title,
     )
 
     async def stream():
         try:
-            for chunk in ai_provider.stream_chat(messages):
+            for chunk in ai_provider.stream_chat(messages, model=request.model):
                 yield json.dumps({"delta": chunk}) + "\n"
             yield "[DONE]\n"
         except Exception as e:

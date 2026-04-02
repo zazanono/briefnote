@@ -1,6 +1,7 @@
 export interface DocumentSummary {
   id: string
   title: string
+  created_at: string
   updated_at: string
 }
 
@@ -19,4 +20,9 @@ export interface AiChatRequest {
   selection: string | null
   action: AiAction
   user_message: string
+  model?: string
+}
+
+export interface AiSettings {
+  model: string
 }
