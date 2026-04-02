@@ -1,13 +1,23 @@
 import { AiSettings, ChatMessage, Document, DocumentSummary } from './types'
 
 export async function listDocuments(): Promise<DocumentSummary[]> {
-  const res = await fetch('/api/documents')
+  const res = await fetch(`/api/documents?t=${Date.now()}`, {
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
+  })
   if (!res.ok) throw new Error('Failed to list documents')
   return res.json()
 }
 
 export async function getDocument(id: string): Promise<Document> {
-  const res = await fetch(`/api/documents/${id}`)
+  const res = await fetch(`/api/documents/${id}?t=${Date.now()}`, {
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
+  })
   if (!res.ok) throw new Error('Failed to get document')
   return res.json()
 }
