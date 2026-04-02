@@ -1,5 +1,9 @@
 # BriefNote
 
+<p align="center">
+  <img src="./frontend/public/icon-192.svg" alt="BriefNote icon" width="96" height="96" />
+</p>
+
 BriefNote is a lightweight AI note-taking app with a Google-Docs-like writing experience.  
 You write notes in a document editor, then use an AI sidebar to ask questions, summarize, rewrite selections, and extract useful information from the current note context.
 
@@ -104,7 +108,7 @@ Do not commit your real `.env` file. A `.env.example` is provided.
 
 - The app is fully usable without AI (document CRUD and editing work independently).
 - The first version intentionally avoids auth, collaboration, and vector search.
-- AI answers are grounded in the current note context only — the model is instructed not to answer from general knowledge.
+- AI answers are grounded in the current note context.
 - Project workflow instructions for OpenCode live in `AGENTS.md`.
 
 ## License
