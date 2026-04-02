@@ -1,11 +1,18 @@
 # BriefNote
 
-<p align="center">
-  <img src="./frontend/public/icon-192.svg" alt="BriefNote icon" width="96" height="96" />
-</p>
+<table>
+<tr>
+<td>
 
 BriefNote is a lightweight AI note-taking app with a Google-Docs-like writing experience.  
 You write notes in a document editor, then use an AI sidebar to ask questions, summarize, rewrite selections, and extract useful information from the current note context.
+
+</td>
+<td align="right" valign="middle" width="120">
+  <img src="./frontend/public/icon-192.svg" alt="BriefNote icon" width="96" height="96" />
+</td>
+</tr>
+</table>
 
 ## Current MVP Scope
 
