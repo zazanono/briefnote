@@ -4,7 +4,7 @@ from typing import Literal
 Action = Literal["ask", "summarize", "rewrite", "extract"]
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant. Answer ONLY using the provided document context. "
+    "You are a helpful assistant. Answer using the provided document context as much as possible. "
     "If the context does not contain enough information to answer, say so explicitly. "
     "Do not make up information. Keep responses concise and relevant."
 )
