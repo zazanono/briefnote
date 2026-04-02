@@ -719,3 +719,38 @@ body {
   padding: 40px;
 }
 .empty-state p { font-size: 14px; margin-bottom: 0; }
+
+/* --- Markdown Styles inside AI Messages --- */
+.ai-message p {
+  margin-bottom: 1em;
+}
+.ai-message p:last-child {
+  margin-bottom: 0;
+}
+.ai-message ul, .ai-message ol {
+  padding-left: 20px;
+  margin-bottom: 1em;
+}
+.ai-message ul:last-child, .ai-message ol:last-child {
+  margin-bottom: 0;
+}
+.ai-message code {
+  background-color: var(--surface-hover);
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  padding: 2px 4px;
+  color: var(--accent);
+  font-size: 0.9em;
+}
+.ai-message pre {
+  margin-bottom: 1em;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.ai-message pre:last-child {
+  margin-bottom: 0;
+}
+.ai-message pre div {
+  margin: 0 !important; /* Override default margin from react-syntax-highlighter */
+  border-radius: var(--radius-md);
+}

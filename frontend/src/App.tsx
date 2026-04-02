@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import ReactMarkdown from 'react-markdown'
+import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { AiAction, AiChatRequest, AiSettings, Document, DocumentSummary } from './types'
 import { createDocument, deleteDocument, getAiSettings, getDocument, listDocuments, updateDocument, getChatHistory } from './api'
 
@@ -446,7 +449,36 @@ function AiPanel({
         
         {chatMessages.map((m, index) => (
           <div key={m.id} className={`ai-message-bubble ${m.role}`}>
-            <div className="ai-message">{m.content || (m.role === 'assistant' && loading ? 'Thinking...' : '')}</div>
+            <div className="ai-message">
+              {m.role === 'assistant' ? (
+                m.content ? (
+                  <ReactMarkdown
+                    components={{
+                      code({node, inline, className, children, ...props}: any) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <SyntaxHighlighter
+                            {...props}
+                            children={String(children).replace(/\n$/, '')}
+                            style={vscDarkPlus}
+                            language={match[1]}
+                            PreTag="div"
+                          />
+                        ) : (
+                          <code {...props} className={className}>
+                            {children}
+                          </code>
+                        )
+                      }
+                    }}
+                  >
+                    {m.content}
+                  </ReactMarkdown>
+                ) : loading ? 'Thinking...' : ''
+              ) : (
+                m.content
+              )}
+            </div>
             {m.role === 'assistant' && m.content && (
               <div className="ai-response-actions">
                 <button className="action-btn small" onClick={() => handleCopy(m.content, m.id)}>
