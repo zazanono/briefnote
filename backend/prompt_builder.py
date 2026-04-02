@@ -40,6 +40,7 @@ def build_messages(
     selection: str | None = None,
     title: str = "Untitled",
     max_chars: int = 32000,
+    recent_messages: list[dict] | None = None,
 ) -> list[dict]:
     doc_text = strip_html(document_content)
     if len(doc_text) > max_chars:
@@ -54,7 +55,10 @@ def build_messages(
         instruction = ACTION_INSTRUCTIONS[action]
         user_content = f"{instruction}\n\n{note_context}"
 
-    return [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": user_content},
-    ]
+    messages = [{"role": "system", "content": system_content}]
+    if recent_messages:
+        messages.extend(recent_messages)
+        
+    messages.append({"role": "user", "content": user_content})
+
+    return messages

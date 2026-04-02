@@ -13,6 +13,14 @@ export interface Document {
   updated_at: string
 }
 
+export interface ChatMessage {
+  id: string
+  document_id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
 export type AiAction = 'ask' | 'summarize' | 'rewrite' | 'extract'
 
 export interface AiChatRequest {

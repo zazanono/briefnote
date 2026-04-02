@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import Column, DateTime, String, Text, create_engine
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 import ai_provider
@@ -31,6 +31,16 @@ class DocumentModel(Base):
     content = Column(Text, nullable=False, default="")
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class ChatMessageModel(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+    role = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class DocumentSummary(BaseModel):
@@ -58,6 +68,16 @@ class DocumentResponse(BaseModel):
     content: str
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    document_id: str
+    role: str
+    content: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -152,6 +172,15 @@ def delete_document(doc_id: str, db: Session = Depends(get_db)):
     db.commit()
 
 
+@app.get("/api/documents/{doc_id}/chat", response_model=list[ChatMessageResponse])
+def get_document_chat(doc_id: str, db: Session = Depends(get_db)):
+    doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    messages = db.query(ChatMessageModel).filter(ChatMessageModel.document_id == doc_id).order_by(ChatMessageModel.created_at.asc()).all()
+    return [ChatMessageResponse.model_validate(msg) for msg in messages]
+
+
 @app.get("/api/ai/settings", response_model=AiSettings)
 def get_ai_settings():
     import ai_provider
@@ -164,18 +193,56 @@ async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    now = datetime.now(timezone.utc)
+    user_msg = ChatMessageModel(
+        id=str(uuid.uuid4()),
+        document_id=doc.id,
+        role="user",
+        content=request.user_message,
+        created_at=now
+    )
+    db.add(user_msg)
+    db.commit()
+
+    recent_db_messages = db.query(ChatMessageModel).filter(
+        ChatMessageModel.document_id == doc.id,
+        ChatMessageModel.id != user_msg.id
+    ).order_by(ChatMessageModel.created_at.desc()).limit(10).all()
+    
+    recent_db_messages.reverse()
+    
+    recent_messages = [
+        {"role": m.role, "content": m.content} for m in recent_db_messages
+    ]
+
     messages = prompt_builder.build_messages(
         document_content=doc.content,
         action=request.action,
         user_message=request.user_message,
         selection=request.selection,
         title=doc.title,
+        recent_messages=recent_messages
     )
 
     async def stream():
+        assistant_content = ""
         try:
             for chunk in ai_provider.stream_chat(messages, model=request.model):
+                if chunk:
+                    assistant_content += chunk
                 yield json.dumps({"delta": chunk}) + "\n"
+            
+            with SessionLocal() as db_session:
+                assistant_msg = ChatMessageModel(
+                    id=str(uuid.uuid4()),
+                    document_id=doc.id,
+                    role="assistant",
+                    content=assistant_content,
+                    created_at=datetime.now(timezone.utc)
+                )
+                db_session.add(assistant_msg)
+                db_session.commit()
+                
             yield "[DONE]\n"
         except Exception as e:
             yield json.dumps({"error": str(e)}) + "\n"

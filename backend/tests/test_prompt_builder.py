@@ -138,3 +138,22 @@ class TestBuildMessages:
         )
         system = messages[0]["content"]
         assert "general knowledge" in system.lower() or "personal assistant" in system.lower()
+
+    def test_recent_messages_appended(self):
+        recent = [
+            {"role": "user", "content": "What is 1+1?"},
+            {"role": "assistant", "content": "2"},
+        ]
+        messages = prompt_builder.build_messages(
+            document_content="<p>Test</p>",
+            action="ask",
+            user_message="And 2+2?",
+            recent_messages=recent,
+        )
+        assert len(messages) == 4
+        assert messages[0]["role"] == "system"
+        assert messages[1] == recent[0]
+        assert messages[2] == recent[1]
+        assert messages[3]["role"] == "user"
+        assert messages[3]["content"] == "And 2+2?"
+
