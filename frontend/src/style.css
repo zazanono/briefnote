@@ -734,7 +734,7 @@ body {
 .ai-message ul:last-child, .ai-message ol:last-child {
   margin-bottom: 0;
 }
-.ai-message code {
+.ai-message p > code, .ai-message li > code {
   background-color: var(--surface-hover);
   border-radius: 4px;
   font-family: 'Courier New', Courier, monospace;
@@ -742,10 +742,15 @@ body {
   color: var(--accent);
   font-size: 0.9em;
 }
+.ai-message pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
 .ai-message pre {
   margin-bottom: 1em;
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow-x: auto;
 }
 .ai-message pre:last-child {
   margin-bottom: 0;

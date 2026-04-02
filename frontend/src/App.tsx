@@ -461,6 +461,7 @@ function AiPanel({
                             {...props}
                             children={String(children).replace(/\n$/, '')}
                             style={vscDarkPlus}
+                            customStyle={{ padding: '16px', margin: 0, borderRadius: '8px' }}
                             language={match[1]}
                             PreTag="div"
                           />
