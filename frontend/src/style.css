@@ -10,20 +10,95 @@
   --text-light: hsl(250, 15%, 65%);
   
   --surface: hsl(255, 15%, 99%);
+  --bg-message: #ffffff;
+  --bg-code-inline: hsl(250, 20%, 94%);
   --surface-hover: hsl(250, 30%, 95%);
   --surface-active: hsl(250, 40%, 94%);
   
-  --accent: hsl(255, 50%, 68%);
-  --accent-hover: hsl(255, 45%, 60%);
+  --accent: hsl(255, 60%, 75%);
+  --accent-hover: hsl(255, 55%, 68%);
   --accent-text: #ffffff;
   --danger: #ef4444;
 
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --bg-new-doc: hsl(255, 40%, 96%);
+  --bg-new-doc-hover: hsl(255, 40%, 94%);
+  --bg-badge: #f1f5f9;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
   
-  --shadow-sm: 0 1px 2px oklch(0.65 0.06 280 / 0.05);
-  --shadow-md: 0 4px 12px oklch(0.65 0.06 280 / 0.08);
+  --shadow-sm: 0 2px 4px oklch(0.65 0.06 280 / 0.04);
+  --shadow-md: 0 4px 12px oklch(0.65 0.06 280 / 0.06);
+  --shadow-panel-bottom: 0 4px 12px oklch(0.65 0.06 280 / 0.05);
+  --shadow-panel-top: 0 -4px 12px oklch(0.65 0.06 280 / 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-sidebar: hsl(250, 12%, 12%);
+    --bg-editor: hsl(250, 12%, 10%);
+    --bg-ai: hsl(250, 12%, 12%);
+    --bg-page: hsl(250, 12%, 14%);
+    --border: hsl(250, 12%, 22%);
+    
+    --text-main: #f3f4f6;
+    --text-muted: hsl(250, 10%, 70%);
+    --text-light: hsl(250, 12%, 50%);
+    
+    --surface: hsl(250, 12%, 14%);
+    --bg-message: hsl(250, 12%, 16%);
+    --bg-code-inline: hsl(250, 15%, 20%);
+    --surface-hover: hsl(250, 15%, 20%);
+    --surface-active: hsl(250, 20%, 26%);
+    
+    --accent: hsl(255, 75%, 72%);
+    --accent-hover: hsl(255, 70%, 78%);
+    --accent-text: #ffffff;
+    --danger: #ef4444;
+
+    --bg-new-doc: hsl(250, 15%, 18%);
+    --bg-new-doc-hover: hsl(250, 20%, 22%);
+    --bg-badge: hsl(250, 15%, 20%);
+
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.2), 0 0 0 1px var(--border);
+    --shadow-md: 0 8px 16px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+    --shadow-panel-bottom: 0 8px 24px rgba(0,0,0,0.3);
+    --shadow-panel-top: 0 -8px 24px rgba(0,0,0,0.3);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-sidebar: hsl(250, 12%, 12%);
+  --bg-editor: hsl(250, 12%, 10%);
+  --bg-ai: hsl(250, 12%, 12%);
+  --bg-page: hsl(250, 12%, 14%);
+  --border: hsl(250, 12%, 22%);
+  
+  --text-main: #f3f4f6;
+  --text-muted: hsl(250, 10%, 70%);
+  --text-light: hsl(250, 12%, 50%);
+  
+  --surface: hsl(250, 12%, 14%);
+  --bg-message: hsl(250, 12%, 16%);
+  --bg-code-inline: hsl(250, 15%, 20%);
+  --surface-hover: hsl(250, 15%, 20%);
+  --surface-active: hsl(250, 20%, 26%);
+  
+  --accent: hsl(255, 75%, 72%);
+  --accent-hover: hsl(255, 70%, 78%);
+  --accent-text: #ffffff;
+  --danger: #ef4444;
+
+  --bg-new-doc: hsl(250, 15%, 18%);
+  --bg-new-doc-hover: hsl(250, 20%, 22%);
+  --bg-badge: hsl(250, 15%, 20%);
+
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.2), 0 0 0 1px var(--border);
+  --shadow-md: 0 8px 16px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+  --shadow-panel-bottom: 0 8px 24px rgba(0,0,0,0.3);
+  --shadow-panel-top: 0 -8px 24px rgba(0,0,0,0.3);
 }
 
 * {
@@ -124,10 +199,10 @@ body {
 .new-doc-btn {
   width: 100%;
   padding: 8px 14px;
-  background: hsl(255, 40%, 96%);
+  background: var(--bg-new-doc);
   color: var(--accent);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-sm);
   font-weight: 500;
   font-size: 13px;
@@ -140,7 +215,7 @@ body {
 }
 
 .new-doc-btn:hover {
-  background: hsl(255, 40%, 94%);
+  background: var(--bg-new-doc-hover);
   color: var(--accent-hover);
 }
 
@@ -155,7 +230,7 @@ body {
 
 .doc-item {
   padding: 8px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -230,7 +305,7 @@ body {
 .rename-input {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: 4px 8px;
   font-size: 13px;
   font-family: inherit;
@@ -286,7 +361,7 @@ body {
 
 .modal-btn {
   padding: 8px 16px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -386,7 +461,8 @@ body {
 }
 
 .editor-title-input::placeholder {
-  color: #e2e8f0;
+  color: var(--text-light);
+  opacity: 0.5;
 }
 
 .editor-header:hover .rename-btn {
@@ -437,7 +513,7 @@ body {
   min-height: 100%;
   font-size: 16px;
   line-height: 1.7;
-  color: #334155;
+  color: var(--text-main);
 }
 
 .ProseMirror p { margin-bottom: 1.4em; }
@@ -484,6 +560,8 @@ body {
 .ai-header {
   padding: 24px;
   background: var(--surface);
+  box-shadow: var(--shadow-panel-bottom);
+  z-index: 10;
 }
 
 .ai-header-row {
@@ -510,7 +588,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   padding: 3px 8px;
-  background: #f1f5f9;
+  background: var(--bg-badge);
   color: var(--text-muted);
   border-radius: 12px;
   letter-spacing: 0.05em;
@@ -583,7 +661,7 @@ body {
   line-height: 1.6;
   white-space: pre-wrap;
   color: var(--text-main);
-  background: var(--surface);
+  background: var(--bg-message);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 0;
   padding: 16px;
@@ -612,7 +690,7 @@ body {
   font-size: 12px;
   font-weight: 500;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
@@ -624,7 +702,7 @@ body {
 .cancel-btn {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
@@ -637,6 +715,7 @@ body {
 .ai-actions {
   padding: 24px;
   background: var(--surface);
+  box-shadow: var(--shadow-panel-top);
   z-index: 10;
 }
 
@@ -650,7 +729,7 @@ body {
 .action-btn {
   padding: 8px 14px;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text-main);
   font-size: 13px;
@@ -680,7 +759,8 @@ body {
   line-height: 1.5;
   resize: none;
   font-family: inherit;
-  background: var(--surface);
+  background: var(--bg-message);
+  color: var(--text-main);
   outline: none;
   box-shadow: var(--shadow-md);
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -693,7 +773,7 @@ body {
   bottom: 8px;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--accent-text);
   border: none;
@@ -735,7 +815,7 @@ body {
   margin-bottom: 0;
 }
 .ai-message p > code, .ai-message li > code {
-  background-color: var(--surface-hover);
+  background-color: var(--bg-code-inline);
   border-radius: 4px;
   font-family: 'Courier New', Courier, monospace;
   padding: 2px 4px;
@@ -758,4 +838,79 @@ body {
 .ai-message pre div {
   margin: 0 !important; /* Override default margin from react-syntax-highlighter */
   border-radius: var(--radius-md);
+}
+
+.theme-menu-container {
+  position: relative;
+}
+
+.theme-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 50;
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.theme-menu-item:hover {
+  background: var(--surface-hover);
+}
+
+.theme-menu-item.active {
+  background: var(--surface-active);
+  font-weight: 500;
+}
+
+.theme-menu-item svg {
+  color: var(--text-muted);
+}
+
+.sidebar-footer {
+  padding: 12px 20px;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--bg-sidebar);
+}
+
+.theme-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.theme-toggle:hover,
+.theme-menu-container.open .theme-toggle {
+  background: var(--surface-hover);
+  color: var(--text-main);
 }

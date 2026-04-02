@@ -46,18 +46,51 @@ function Sidebar({
   docs,
   loading,
   currentId,
+  theme,
   onSelect,
   onCreate,
   onDelete,
+  onChangeTheme,
 }: {
   docs: DocumentSummary[]
   loading: boolean
   currentId: string | null
+  theme: 'light' | 'dark' | 'system'
   onSelect: (id: string) => void
   onCreate: () => void
   onDelete: (id: string) => void
+  onChangeTheme: (theme: 'light' | 'dark' | 'system') => void
 }) {
   const [docToDelete, setDocToDelete] = useState<DocumentSummary | null>(null)
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [systemIsDark, setSystemIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const listener = (e: MediaQueryListEvent) => setSystemIsDark(e.matches)
+    if (media.addEventListener) media.addEventListener('change', listener)
+    else media.addListener(listener)
+    return () => {
+      if (media.removeEventListener) media.removeEventListener('change', listener)
+      else media.removeListener(listener)
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setThemeMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const effectiveIsDark = theme === 'dark' || (theme === 'system' && systemIsDark)
 
   useEffect(() => {
     if (!docToDelete) return
@@ -120,6 +153,34 @@ function Sidebar({
           </div>
         </div>
       )}
+
+      <div className="sidebar-footer">
+        <div className="theme-menu-container" ref={menuRef}>
+          <button className="theme-toggle" onClick={() => setThemeMenuOpen(!themeMenuOpen)} title="Theme settings">
+            {effectiveIsDark ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            )}
+          </button>
+          {themeMenuOpen && (
+            <div className="theme-menu">
+              <button className={`theme-menu-item ${theme === 'light' ? 'active' : ''}`} onClick={() => { onChangeTheme('light'); setThemeMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                Light mode
+              </button>
+              <button className={`theme-menu-item ${theme === 'dark' ? 'active' : ''}`} onClick={() => { onChangeTheme('dark'); setThemeMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                Dark mode
+              </button>
+              <button className={`theme-menu-item ${theme === 'system' ? 'active' : ''}`} onClick={() => { onChangeTheme('system'); setThemeMenuOpen(false); }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                Current System
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -211,11 +272,13 @@ function AiPanel({
   documentId,
   editor,
   lastSelectionRef,
+  hasSelection,
   className,
 }: {
   documentId: string | null
   editor: ReturnType<typeof useEditor>
   lastSelectionRef: React.RefObject<{ from: number; to: number } | null>
+  hasSelection: boolean
   className?: string
 }) {
   const [message, setMessage] = useState('')
@@ -406,13 +469,6 @@ function AiPanel({
     }
   }
 
-  const hasSelection = (() => {
-    const stored = lastSelectionRef.current
-    if (stored && stored.from !== stored.to) return true
-    if (!editor) return false
-    return editor.state.selection.from !== editor.state.selection.to
-  })()
-
   return (
     <div className={className || 'ai-panel'}>
       <div className="ai-header">
@@ -432,7 +488,7 @@ function AiPanel({
               className="settings-input"
               value={settings?.model || ''}
               onChange={e => setSettings(s => s ? { ...s, model: e.target.value } : { model: e.target.value })}
-              placeholder="openrouter/free"
+              placeholder="qwen/qwen3.6-plus:free"
               onMouseDown={e => e.stopPropagation()}
             />
           </div>
@@ -561,6 +617,10 @@ export default function App() {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [mobilePane, setMobilePane] = useState<'sidebar' | 'editor' | 'ai'>('editor')
+  const [hasSelection, setHasSelection] = useState(false)
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'system' | 'light' | 'dark') || 'system'
+  })
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null)
   const currentDocRef = useRef<Document | null>(currentDoc)
@@ -581,6 +641,10 @@ export default function App() {
       const { from, to } = editor.state.selection
       if (from !== to) {
         lastSelectionRef.current = { from, to }
+        setHasSelection(true)
+      } else {
+        lastSelectionRef.current = null
+        setHasSelection(false)
       }
     },
   })
@@ -752,6 +816,16 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (theme === 'system') {
+      document.documentElement.removeAttribute('data-theme')
+      localStorage.removeItem('theme')
+    } else {
+      document.documentElement.setAttribute('data-theme', theme)
+      localStorage.setItem('theme', theme)
+    }
+  }, [theme])
+
   return (
     <div className="app">
       <div className="mobile-bar">
@@ -780,6 +854,7 @@ export default function App() {
           docs={docs}
           loading={docsLoading}
           currentId={currentDoc?.id ?? null}
+          theme={theme}
           onSelect={id => {
             if (id === currentDoc?.id) {
               setMobilePane('editor')
@@ -796,6 +871,7 @@ export default function App() {
           }}
           onCreate={() => { handleCreate(); setMobilePane('editor') }}
           onDelete={handleDelete}
+          onChangeTheme={setTheme}
         />
       </div>
 
@@ -813,6 +889,7 @@ export default function App() {
         documentId={currentDoc?.id ?? null}
         editor={editor}
         lastSelectionRef={lastSelectionRef}
+        hasSelection={hasSelection}
         className={mobilePane === 'ai' ? 'ai-panel mobile-open' : undefined}
       />
     </div>

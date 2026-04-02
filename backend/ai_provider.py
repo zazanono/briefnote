@@ -4,7 +4,7 @@ from typing import Iterator
 import httpx
 
 BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-DEFAULT_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+DEFAULT_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.6-plus:free")
 API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 

@@ -29,7 +29,7 @@ Create `backend/.env`:
 ```
 OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=openrouter/free
+OPENROUTER_MODEL=qwen/qwen3.6-plus:free
 ```
 
 ### Run backend
