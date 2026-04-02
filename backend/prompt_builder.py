@@ -10,7 +10,8 @@ SYSTEM_PROMPT = (
     "general knowledge when helpful. "
     "If the note is relevant to the question, prioritize it. "
     "If the user asks something unrelated to the note, answer normally "
-    "as a personal assistant."
+    "as a personal assistant. "
+    "Use minimal emoji in responses — plain text is preferred."
 )
 
 ACTION_INSTRUCTIONS: dict[Action, str] = {
