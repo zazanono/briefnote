@@ -17,8 +17,8 @@ You write notes in a document editor, then use an AI sidebar to ask questions, s
 
 - Frontend: React + TypeScript + Vite
 - Backend: FastAPI + SQLAlchemy + SQLite
-- Editor: Tiptap (or textarea in early scaffold stages)
-- AI: Backend-mediated provider integration
+- Editor: Tiptap
+- AI: Backend-mediated OpenRouter integration (OpenAI-compatible streaming API)
 - Styling: Plain CSS
 
 ## Project Structure
@@ -27,6 +27,9 @@ You write notes in a document editor, then use an AI sidebar to ask questions, s
 briefnote/
 ├── frontend/
 ├── backend/
+│   ├── prompt_builder.py
+│   ├── ai_provider.py
+│   └── main.py
 ├── AGENTS.md
 └── README.md
 ```
@@ -38,6 +41,7 @@ briefnote/
 - Node.js 18+ and npm
 - Python 3.11+ or 3.12+
 - Git
+- An [OpenRouter](https://openrouter.ai) API key (free account works)
 
 ## Backend Setup
 
@@ -49,9 +53,9 @@ pip install -e .
 uvicorn main:app --reload
 ```
 
-The backend should start on something like:
+The backend starts on:
 
-```text
+```
 http://127.0.0.1:8000
 ```
 
@@ -65,43 +69,44 @@ npm install
 npm run dev
 ```
 
-The frontend should start on something like:
+The frontend starts on:
 
-```text
+```
 http://localhost:5173
 ```
 
 ## Environment Variables
 
-Create a local `.env` file when needed for AI integration.
-
-Example:
+Create a `backend/.env` file for AI integration:
 
 ```env
-OPENAI_API_KEY=your_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+OPENROUTER_API_KEY=your_openrouter_key_here
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=qwen/qwen3.6-plus-preview:free
 ```
 
-Do not commit your real `.env` file. Commit only `.env.example` if you add one later.
+Get a free API key at [openrouter.ai/keys](https://openrouter.ai/keys).  
+The default model is `qwen/qwen3.6-plus-preview:free` which is currently free on OpenRouter.  
+Do not commit your real `.env` file. A `.env.example` is provided.
 
 ## Current Status
 
-This repo currently contains the initial MVP scaffold.  
-The next steps are:
-
-- finish document CRUD flow
-- improve editor experience
-- add AI chat endpoint
-- stream AI responses into the sidebar
-- support insert / replace actions from AI output
+- ✅ Document CRUD (create, rename, delete)
+- ✅ Tiptap editor with autosave
+- ✅ AI panel with streaming responses via OpenRouter
+- ✅ Ask / Summarize / Rewrite / Extract actions
+- ✅ Insert at cursor and Replace selection from AI output
+- 🔲 Voice input
+- 🔲 Auth and multi-user support
+- 🔲 Local model support (Ollama)
 
 ## Notes
 
-- The app should remain usable without AI.
+- The app is fully usable without AI (document CRUD and editing work independently).
 - The first version intentionally avoids auth, collaboration, and vector search.
-- Project workflow instructions for OpenCode live in `AGENTS.md` and related markdown files.
+- AI answers are grounded in the current note context only — the model is instructed not to answer from general knowledge.
+- Project workflow instructions for OpenCode live in `AGENTS.md`.
 
 ## License
 
-MIT
+Apache License 2.0
