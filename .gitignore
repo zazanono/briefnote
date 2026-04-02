@@ -98,3 +98,4 @@ fix_*.py
 patch_*.py
 modify_*.py
 update_*.py
+*-prompts*.md
