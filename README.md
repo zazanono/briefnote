@@ -5,7 +5,7 @@
 <td>
 
 BriefNote is a lightweight AI note-taking app with a Google-Docs-like writing experience.  
-You write notes in a document editor, then use an AI sidebar to ask questions, summarize, rewrite selections, and extract useful information from the current note context.
+Write notes in a clean document editor, then use the AI sidebar to ask questions, summarize, rewrite, and extract — all grounded in the current note context.
 
 </td>
 <td align="right" valign="middle" width="120">
@@ -14,23 +14,36 @@ You write notes in a document editor, then use an AI sidebar to ask questions, s
 </tr>
 </table>
 
-## Current MVP Scope
+## Features
 
-- Single-user note-taking app
-- Left sidebar for documents
-- Center editor for writing notes
-- Right AI panel for note-aware actions
-- AI uses selected text when available, otherwise the current document
-- FastAPI backend + React frontend
-- SQLite for local persistence
+- **Document editor** — Tiptap-powered rich text editor with autosave
+- **AI sidebar** — ask questions, summarize, rewrite, and extract from the current note
+- **Context-aware AI** — uses selected text when available, otherwise the full document
+- **Streaming responses** — AI responses stream in real time via OpenRouter
+- **Web search mode** — optional AI-assisted web search toggle in the composer
+- **Document management** — create, rename, and delete notes from the sidebar
+- **Dark mode** — full light/dark theme support
+- **Fully offline-capable** — editing and document management work without AI
+
+## UI
+
+The app is structured as three panels:
+
+| Panel | Role |
+|---|---|
+| Left sidebar | Document list — create, select, rename, delete notes |
+| Center editor | Tiptap document — the main writing surface |
+| Right AI panel | Context-aware AI tools and conversation |
+
+The center note panel scrolls internally once content exceeds the available height — the rest of the shell remains static. The AI composer at the bottom of the right panel includes a unified input area with action buttons (Summarize, Rewrite, Extract) and a globe icon for toggling web search mode on/off.
 
 ## Tech Stack
 
-- Frontend: React + TypeScript + Vite
-- Backend: FastAPI + SQLAlchemy + SQLite
-- Editor: Tiptap
-- AI: Backend-mediated OpenRouter integration (OpenAI-compatible streaming API)
-- Styling: Plain CSS
+- **Frontend:** React + TypeScript + Vite
+- **Backend:** FastAPI + SQLAlchemy + SQLite
+- **Editor:** Tiptap
+- **AI:** OpenRouter integration (OpenAI-compatible streaming API)
+- **Styling:** Plain CSS
 
 ## Project Structure
 
@@ -42,6 +55,7 @@ briefnote/
 │   ├── ai_provider.py
 │   └── main.py
 ├── AGENTS.md
+├── DEPLOY.md
 └── README.md
 ```
 
@@ -54,7 +68,7 @@ briefnote/
 - Git
 - An [OpenRouter](https://openrouter.ai) API key (free account works)
 
-## Backend Setup
+### Backend Setup
 
 ```bash
 cd backend
@@ -64,13 +78,9 @@ pip install -e .
 uvicorn main:app --reload
 ```
 
-The backend starts on:
+Backend runs on `http://127.0.0.1:8000`
 
-```
-http://127.0.0.1:8000
-```
-
-## Frontend Setup
+### Frontend Setup
 
 Open a second terminal:
 
@@ -80,15 +90,11 @@ npm install
 npm run dev
 ```
 
-The frontend starts on:
+Frontend runs on `http://localhost:5173`
 
-```
-http://localhost:5173
-```
+### Environment Variables
 
-## Environment Variables
-
-Create a `backend/.env` file for AI integration:
+Create a `backend/.env` file:
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_key_here
@@ -97,26 +103,26 @@ OPENROUTER_MODEL=qwen/qwen3.6-plus-preview:free
 ```
 
 Get a free API key at [openrouter.ai/keys](https://openrouter.ai/keys).  
-The default model is `qwen/qwen3.6-plus-preview:free` which is currently free on OpenRouter.  
-Do not commit your real `.env` file. A `.env.example` is provided.
+The default model is `qwen/qwen3.6-plus-preview:free`, currently free on OpenRouter.  
+Do not commit your real `.env` — a `.env.example` is provided.
 
-## Current Status
+## Status
 
 - ✅ Document CRUD (create, rename, delete)
 - ✅ Tiptap editor with autosave
 - ✅ AI panel with streaming responses via OpenRouter
 - ✅ Ask / Summarize / Rewrite / Extract actions
 - ✅ Insert at cursor and Replace selection from AI output
+- ✅ Bounded note scroll with polished internal scrollbar
+- ✅ Unified AI composer with globe-based web search toggle
+- ✅ Dark mode with refined note header and panel hierarchy
 - 🔲 Voice input
 - 🔲 Auth and multi-user support
 - 🔲 Local model support (Ollama)
 
-## Notes
+## Deployment
 
-- The app is fully usable without AI (document CRUD and editing work independently).
-- The first version intentionally avoids auth, collaboration, and vector search.
-- AI answers are grounded in the current note context.
-- Project workflow instructions for OpenCode live in `AGENTS.md`.
+See [DEPLOY.md](./DEPLOY.md) for deployment instructions.
 
 ## License
 
