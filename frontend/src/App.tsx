@@ -288,6 +288,9 @@ function AiPanel({
   const [settings, setSettings] = useState<AiSettings | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [webGround, setWebGround] = useState(false)
+  const [webMenuOpen, setWebMenuOpen] = useState(false)
+  const webMenuRef = useRef<HTMLDivElement>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const lastRequestRef = useRef<{ action: AiAction; message: string; selection: string | null } | null>(null)
@@ -309,6 +312,16 @@ function AiPanel({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (webMenuRef.current && !webMenuRef.current.contains(e.target as Node)) {
+        setWebMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   function getSelection(): string | null {
     if (!editor) return null
@@ -353,6 +366,7 @@ function AiPanel({
       action,
       user_message: msg,
       model: settings?.model,
+      web_ground: webGround ? true : undefined,
     }
 
     const tempId = Date.now().toString()
@@ -469,6 +483,28 @@ function AiPanel({
     }
   }
 
+  // Helper to render sources when the following message contains the special marker
+  function renderSources(index: number) {
+    const next = chatMessages[index + 1]
+    if (!next || !next.content.startsWith('[WEB_SOURCES]')) return null
+    try {
+      const json = next.content.replace('\n', '').replace('[WEB_SOURCES]', '')
+      const sources = JSON.parse(json)
+      return (
+        <div className="ai-sources">
+          {sources.map((s: any, i: number) => (
+            <div key={i} className="ai-source-item">
+              <a href={s.url} target="_blank" rel="noreferrer">{s.title || s.url}</a>
+              <span className="ai-source-host">{s.host || ''}</span>
+            </div>
+          ))}
+        </div>
+      )
+    } catch {
+      return null
+    }
+  }
+
   return (
     <div className={className || 'ai-panel'}>
       <div className="ai-header">
@@ -510,7 +546,7 @@ function AiPanel({
                 m.content ? (
                   <ReactMarkdown
                     components={{
-                      code({node, inline, className, children, ...props}: any) {
+                      code: ({node, inline, className, children, ...props}: any) => {
                         const match = /language-(\w+)/.exec(className || '')
                         return !inline && match ? (
                           <SyntaxHighlighter
@@ -538,16 +574,44 @@ function AiPanel({
             </div>
             {m.role === 'assistant' && m.content && (
               <div className="ai-response-actions">
-                <button className="action-btn small" onClick={() => handleCopy(m.content, m.id)}>
-                  {copiedId === m.id ? 'Copied!' : 'Copy'}
+                <button
+                  className="icon-btn"
+                  onClick={() => handleCopy(m.content, m.id)}
+                  title={copiedId === m.id ? 'Copied!' : 'Copy'}
+                >
+                  {copiedId === m.id ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  )}
                 </button>
-                <button className="action-btn small" onClick={() => handleInsert(m.content)}>Insert</button>
-                <button className="action-btn small" onClick={() => handleReplace(m.content)}>Replace</button>
+                <button
+                  className="icon-btn"
+                  onClick={() => handleInsert(m.content)}
+                  title="Insert into document"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+                <button
+                  className="icon-btn"
+                  onClick={() => handleReplace(m.content)}
+                  title="Replace selection"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
                 {index === chatMessages.length - 1 && (
-                  <button className="action-btn small" onClick={handleRegenerate}>Retry</button>
+                  <button
+                    className="icon-btn"
+                    onClick={handleRegenerate}
+                    title="Regenerate response"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                  </button>
                 )}
               </div>
             )}
+
+            {m.role === 'assistant' && renderSources(index)}
           </div>
         ))}
         
@@ -592,19 +656,51 @@ function AiPanel({
               }
             }}
           />
-          <button
-            className="ai-submit"
-            onClick={() => handleAction('ask')}
-            onMouseDown={e => e.preventDefault()}
-            disabled={loading || !documentId || (!message.trim() && !hasSelection)}
-            title="Send"
-          >
-            {loading ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
-            )}
-          </button>
+          <div className="ai-input-controls">
+            <div className="web-search-menu" ref={webMenuRef}>
+              <button
+                className={`web-search-toggle ${webGround ? 'active' : ''}`}
+                onClick={() => setWebMenuOpen(!webMenuOpen)}
+                onMouseDown={e => e.preventDefault()}
+                title="Web search"
+                aria-label="Web search settings"
+                aria-expanded={webMenuOpen}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+              </button>
+              {webMenuOpen && (
+                <div className="web-search-dropdown">
+                  <button
+                    className={`web-search-option ${!webGround ? 'active' : ''}`}
+                    onClick={() => { setWebGround(false); setWebMenuOpen(false); }}
+                  >
+                    <span className="web-search-option-label">Search off</span>
+                    {!webGround && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                  </button>
+                  <button
+                    className={`web-search-option ${webGround ? 'active' : ''}`}
+                    onClick={() => { setWebGround(true); setWebMenuOpen(false); }}
+                  >
+                    <span className="web-search-option-label">Search on</span>
+                    {webGround && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              className="ai-submit"
+              onClick={() => handleAction('ask')}
+              onMouseDown={e => e.preventDefault()}
+              disabled={loading || !documentId || (!message.trim() && !hasSelection)}
+              title="Send"
+            >
+              {loading ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

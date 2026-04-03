@@ -88,6 +88,8 @@ class AiChatRequest(BaseModel):
     action: Literal["ask", "summarize", "rewrite", "extract"]
     user_message: str
     model: str | None = None
+    truncate_from_id: str | None = None
+    web_ground: bool | None = False
 
 
 class AiSettings(BaseModel):
@@ -193,6 +195,19 @@ async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    if request.truncate_from_id:
+        target_msg = db.query(ChatMessageModel).filter(
+            ChatMessageModel.id == request.truncate_from_id,
+            ChatMessageModel.document_id == doc.id
+        ).first()
+        
+        if target_msg:
+            db.query(ChatMessageModel).filter(
+                ChatMessageModel.document_id == doc.id,
+                ChatMessageModel.created_at >= target_msg.created_at
+            ).delete()
+            db.commit()
+
     now = datetime.now(timezone.utc)
     user_msg = ChatMessageModel(
         id=str(uuid.uuid4()),
@@ -214,23 +229,47 @@ async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
     recent_messages = [
         {"role": m.role, "content": m.content} for m in recent_db_messages
     ]
+    # document fields are SQLAlchemy Column values; convert to native Python types
+    doc_content = doc.content if isinstance(doc.content, str) else str(doc.content)
+    doc_title = doc.title if isinstance(doc.title, str) else str(doc.title)
 
     messages = prompt_builder.build_messages(
-        document_content=doc.content,
+        document_content=doc_content,
         action=request.action,
         user_message=request.user_message,
         selection=request.selection,
-        title=doc.title,
+        title=doc_title,
         recent_messages=recent_messages
     )
 
     async def stream():
         assistant_content = ""
         try:
+            # If web grounding requested, perform Tavily search and inject results into the prompt
+            tavily_sources = None
+            if request.web_ground:
+                try:
+                    import tavily
+                    # keep query simple: prioritize user_message but include the note title
+                    query = f"{request.user_message}"
+                    tavily_sources = tavily.search(query, limit=3)
+                    # append a deterministic web-results block to system prompt
+                    if tavily_sources:
+                        web_block = '\n\nWeb search results:\n' + '\n'.join([f"- {s['title']} ({s['host']}): {s['snippet']} - {s['url']}" for s in tavily_sources])
+                        # prepend to the first system message content
+                        if messages and messages[0]['role'] == 'system':
+                            messages[0]['content'] = messages[0]['content'] + web_block
+                except Exception as e:
+                    # fail gracefully: leave messages unchanged and surface a small warning as part of assistant output
+                    tavily_sources = None
+                    messages.append({"role": "system", "content": "[Warning: web-grounding failed to fetch results; proceeding without web results]"})
+
             for chunk in ai_provider.stream_chat(messages, model=request.model):
                 if chunk:
                     assistant_content += chunk
-                yield json.dumps({"delta": chunk}) + "\n"
+                # ensure we always emit something parsable
+                # include optional metadata on the final assistant message by embedding a special marker
+                yield json.dumps({"delta": chunk or ""}) + "\n"
             
             with SessionLocal() as db_session:
                 assistant_msg = ChatMessageModel(
@@ -242,6 +281,23 @@ async def ai_chat(request: AiChatRequest, db: Session = Depends(get_db)):
                 )
                 db_session.add(assistant_msg)
                 db_session.commit()
+                # If web grounding was used, persist a lightweight metadata record
+                if request.web_ground and 'tavily_sources' in locals() and tavily_sources:
+                    # store a compact JSON mapping in a separate table might be overkill; instead, append a compact sources line
+                    try:
+                        # Update the assistant message content with a sources marker that the frontend can parse
+                        sources_meta = json.dumps({ 'sources': tavily_sources })
+                        assistant_msg_meta = ChatMessageModel(
+                            id=str(uuid.uuid4()),
+                            document_id=doc.id,
+                            role='assistant',
+                            content=f"[WEB_SOURCES]{sources_meta}",
+                            created_at=datetime.now(timezone.utc)
+                        )
+                        db_session.add(assistant_msg_meta)
+                        db_session.commit()
+                    except Exception:
+                        pass
                 
             yield "[DONE]\n"
         except Exception as e:

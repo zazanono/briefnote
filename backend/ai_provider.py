@@ -18,13 +18,15 @@ def stream_chat(messages: list[dict], model: str | None = None) -> Iterator[str]
         "HTTP-Referer": "http://localhost:5173",
         "X-OpenRouter-Title": "BriefNote",
     }
+    # OpenRouter doesn't support streaming in our usage; request non-streaming
     body = {
         "model": model or DEFAULT_MODEL,
         "messages": messages,
         "stream": False,
     }
 
-    resp = httpx.post(f"{BASE_URL}/chat/completions", json=body, headers=headers, timeout=60.0)
+    # increase timeout to allow longer responses
+    resp = httpx.post(f"{BASE_URL}/chat/completions", json=body, headers=headers, timeout=120.0)
     if resp.status_code != 200:
         raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text}")
 
@@ -34,5 +36,6 @@ def stream_chat(messages: list[dict], model: str | None = None) -> Iterator[str]
     if not content:
         return
 
-    for i in range(0, len(content), 4):
-        yield content[i : i + 4]
+    # Yield in small chunks so the frontend can display progressive typing
+    for i in range(0, len(content), 8):
+        yield content[i : i + 8]

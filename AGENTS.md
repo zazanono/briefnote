@@ -33,7 +33,7 @@ Single-user AI note-taking web app with a Google-Docs-like writing experience an
 ## Preferred stack
 - Frontend: React + TypeScript + Vite.
 - Editor: Tiptap.
-- Styling: Tailwind CSS or clean CSS modules.
+- Styling: plain CSS with centralized design tokens and reusable component classes.
 - Backend: FastAPI.
 - Database: SQLite.
 - AI provider abstraction: start with OpenAI-compatible API shape, allow Ollama later.
@@ -55,10 +55,12 @@ Single-user AI note-taking web app with a Google-Docs-like writing experience an
 - Use loading and error states that do not block writing.
 
 ## Prompting rules
-- Instruct the model to answer only from provided document context.
-- If the document does not contain the answer, the model should say so.
+- The AI acts as a helpful personal assistant.
+- The current document is the primary context.
+- Selected text has the highest priority when present.
+- General knowledge may be used when helpful.
 - Separate system instructions, context payload, and user request cleanly.
-- Keep prompt assembly testable.
+- Keep prompt assembly deterministic and testable.
 
 ## Code quality
 - Prefer small files and focused components.
@@ -66,6 +68,14 @@ Single-user AI note-taking web app with a Google-Docs-like writing experience an
 - Add tests for backend prompt construction and core API behavior.
 - Keep naming literal and unsurprising.
 - Refactor only when duplication is real, not speculative.
+
+## Repository hygiene rules
+- Edit source files directly whenever possible.
+- Do not create one-off patch scripts (e.g., `fix_*.py`, `patch_*.py`, `modify_*.py`, `temp_*.py`) unless explicitly requested.
+- Delete any temporary scripts before finishing a task.
+- Keep the repository root clean; place any reusable tooling in a `scripts/` folder.
+- Review newly created files before finishing a task.
+- Avoid broad staging and accidental commits of scratch files.
 
 ## Working style for OpenCode
 - Start with a plan before large changes.
